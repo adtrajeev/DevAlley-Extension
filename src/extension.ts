@@ -400,10 +400,14 @@ async function provideHover(
     backendService.setAuthToken(sidebarProvider.getAuthToken());
 
     const wordRange = document.getWordRangeAtPosition(position);
-    if (!wordRange) return;
+    if (!wordRange) {
+      return;
+    }
 
     const word = document.getText(wordRange);
-    if (word.length < 3) return;
+    if (word.length < 3) {
+      return;
+    }
 
     const line = document.lineAt(position.line);
     const contextRange = new vscode.Range(
@@ -435,7 +439,9 @@ Provide a brief explanation of what this is and how it's used. Keep it concise.`
 
 // Convert string|enum kind → VSCode CompletionItemKind
 function toVscodeKind(kind?: string | vscode.CompletionItemKind): vscode.CompletionItemKind {
-  if (typeof kind === "number") return kind;
+  if (typeof kind === "number") {
+    return kind;
+  }
   return getCompletionKind(kind);
 }
 
@@ -491,10 +497,15 @@ function parseCompletionResponse(response: string): CompletionSuggestion[] {
       const varMatch = line.match(/(?:const|let|var)\s+(\w+)/);
 
       let kind: string = 'text';
-      if (funcMatch?.[1]) kind = 'function';
-      else if (varMatch?.[1]) kind = 'variable';
-      else if (line.includes('class ')) kind = 'class';
-      else if (line.includes('=>') || line.includes('function')) kind = 'function';
+      if (funcMatch?.[1]) {
+        kind = 'function';
+      } else if (varMatch?.[1]) {
+        kind = 'variable';
+      } else if (line.includes('class ')) {
+        kind = 'class';
+      } else if (line.includes('=>') || line.includes('function')) {
+        kind = 'function';
+      }
 
       return {
         text: line,
