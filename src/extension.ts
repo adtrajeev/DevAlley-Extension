@@ -7,17 +7,114 @@ interface ApiResponse {
 
 interface CompletionSuggestion {
   text: string;
-  kind?: string | vscode.CompletionItemKind; // ✅ allow string or enum
+  kind?: string | vscode.CompletionItemKind;
   detail?: string;
   documentation?: string;
   insertText?: string;
 }
 
+// Centralized Backend Service with Authentication
+class BackendService {
+  private baseUrl = "http://192.168.1.10:9090";
+  private authToken: string | null = null;
+  
+  // Set authentication token
+  setAuthToken(token: string | null) {
+    this.authToken = token;
+  }
+  
+  // Get authentication token
+  getAuthToken(): string | null {
+    return this.authToken;
+  }
+  
+  // Check if authenticated
+  isAuthenticated(): boolean {
+    return !!this.authToken;
+  }
+  
+  // Get common headers with authentication
+  private getHeaders(): Record<string, string> {
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+      "User-Agent": "VSCode-DevAlley-Extension"
+    };
+    
+    if (this.authToken) {
+      headers["Authorization"] = `Bearer ${this.authToken}`;
+      headers["X-Auth-Token"] = this.authToken;
+    }
+    
+    return headers;
+  }
+  
+  // Unified backend query method
+  async query(endpoint: string, payload: any): Promise<string> {
+    if (!this.isAuthenticated()) {
+      throw new Error('Authentication required. Please log in first.');
+    }
+    
+    try {
+      const response = await fetch(`${this.baseUrl}${endpoint}`, {
+        method: "POST",
+        headers: this.getHeaders(),
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        if (response.status === 401 || response.status === 403) {
+          throw new Error('Authentication failed. Please log in again.');
+        }
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      const data = (await response.json()) as ApiResponse;
+      return data.response;
+    } catch (error: any) {
+      console.error(`Backend request to ${endpoint} failed:`, error);
+      throw new Error(`Backend error: ${error.message}`);
+    }
+  }
+  
+  // Chat query
+  async queryChat(message: string): Promise<string> {
+    console.log('Making authenticated chat request to backend:', message);
+    return this.query("/query_aatma", { message });
+  }
+  
+  // Completion query with fallback
+  async queryCompletion(prompt: string): Promise<string> {
+    try {
+      return await this.query("/query_completion", {
+        message: prompt,
+        type: "completion",
+        timeout: 5000
+      });
+    } catch (error) {
+      console.error('Completion request failed, trying fallback:', error);
+      
+      // Fallback to chat endpoint
+      try {
+        return await this.query("/query_aatma", { message: prompt });
+      } catch (fallbackError) {
+        console.error('Fallback request also failed:', fallbackError);
+        return ""; // Return empty string instead of throwing
+      }
+    }
+  }
+}
+
+// Create singleton instance
+const backendService = new BackendService();
+
+// Global reference to sidebar provider
+let sidebarProvider: SidebarProvider;
+
 export function activate(context: vscode.ExtensionContext) {
   console.log('DevAlley extension STARTING activation...');
 
   try {
-    const sidebarProvider = new SidebarProvider(context.extensionUri);
+    sidebarProvider = new SidebarProvider(context.extensionUri);
     console.log('SidebarProvider created successfully');
 
     // Register webview provider
@@ -54,6 +151,14 @@ export function activate(context: vscode.ExtensionContext) {
             return [];
           }
 
+          // Check authentication
+          if (!sidebarProvider.isAuthenticated()) {
+            return [];
+          }
+
+          // Update backend service token from sidebar provider
+          backendService.setAuthToken(sidebarProvider.getAuthToken());
+
           try {
             const startLine = Math.max(0, position.line - 20);
             const textBeforeCursor = document.getText(
@@ -70,7 +175,7 @@ ${textBeforeCursor}|CURSOR|${textAfterCursor}
 
 Provide a single completion that continues from the cursor position. Only return the completion text, nothing else.`;
 
-            const response = await queryBackendForCompletion(prompt);
+            const response = await backendService.queryCompletion(prompt);
 
             if (response && response.trim()) {
               return [
@@ -110,6 +215,15 @@ Provide a single completion that continues from the cursor position. Only return
     });
 
     const generateCodeCommand = vscode.commands.registerCommand("devalley.generateCode", async () => {
+      // Check authentication first
+      if (!sidebarProvider.isAuthenticated()) {
+        vscode.window.showWarningMessage('Please log in first to use DevAlley features');
+        return;
+      }
+
+      // Update backend service token
+      backendService.setAuthToken(sidebarProvider.getAuthToken());
+
       const editor = vscode.window.activeTextEditor;
       if (!editor) {
         vscode.window.showWarningMessage('No active editor found');
@@ -122,7 +236,7 @@ Provide a single completion that continues from the cursor position. Only return
       if (selectedText) {
         const prompt = `Generate code based on this comment or description: ${selectedText}`;
         try {
-          const response = await queryBackendForCompletion(prompt);
+          const response = await backendService.queryCompletion(prompt);
           if (response) {
             await editor.edit(editBuilder => {
               editBuilder.replace(selection, response);
@@ -139,7 +253,7 @@ Provide a single completion that continues from the cursor position. Only return
 
         if (description) {
           try {
-            const response = await queryBackendForCompletion(description);
+            const response = await backendService.queryCompletion(description);
             if (response) {
               await editor.edit(editBuilder => {
                 editBuilder.insert(editor.selection.active, response);
@@ -161,11 +275,15 @@ Provide a single completion that continues from the cursor position. Only return
       );
     });
 
-    // Sidebar message handler
+    // Sidebar message handler - updated to use backend service
     sidebarProvider.setMessageHandler(async (message: string) => {
       try {
         console.log('Extension host received message:', message);
-        const response = await queryBackend(message);
+        
+        // Update backend service token from sidebar provider
+        backendService.setAuthToken(sidebarProvider.getAuthToken());
+        
+        const response = await backendService.queryChat(message);
         sidebarProvider.sendResponse(response);
       } catch (error: any) {
         console.error('Extension host error:', error);
@@ -206,6 +324,14 @@ async function provideCompletions(
       return [];
     }
 
+    // Check authentication
+    if (!sidebarProvider.isAuthenticated()) {
+      return [];
+    }
+
+    // Update backend service token
+    backendService.setAuthToken(sidebarProvider.getAuthToken());
+
     const maxSuggestions = config.get('completions.maxSuggestions', 5);
 
     const line = document.lineAt(position);
@@ -235,13 +361,13 @@ Please provide completions as JSON array with format:
 
 Only return the JSON array, no other text.`;
 
-    const response = await queryBackendForCompletion(prompt);
+    const response = await backendService.queryCompletion(prompt);
     const suggestions = parseCompletionResponse(response);
 
     return suggestions.slice(0, maxSuggestions).map((suggestion, index) => {
       const completionItem = new vscode.CompletionItem(
         suggestion.text,
-        toVscodeKind(suggestion.kind) // ✅ FIXED
+        toVscodeKind(suggestion.kind)
       );
 
       completionItem.detail = suggestion.detail || 'DevAlley AI suggestion';
@@ -265,6 +391,14 @@ async function provideHover(
   position: vscode.Position
 ): Promise<vscode.Hover | undefined> {
   try {
+    // Check authentication
+    if (!sidebarProvider.isAuthenticated()) {
+      return undefined;
+    }
+
+    // Update backend service token
+    backendService.setAuthToken(sidebarProvider.getAuthToken());
+
     const wordRange = document.getWordRangeAtPosition(position);
     if (!wordRange) return;
 
@@ -285,7 +419,7 @@ ${context}
 
 Provide a brief explanation of what this is and how it's used. Keep it concise.`;
 
-    const response = await queryBackendForCompletion(prompt);
+    const response = await backendService.queryCompletion(prompt);
 
     if (response && response.trim()) {
       const markdown = new vscode.MarkdownString();
@@ -318,54 +452,6 @@ function getCompletionKind(kind?: string): vscode.CompletionItemKind {
     case 'module': return vscode.CompletionItemKind.Module;
     case 'interface': return vscode.CompletionItemKind.Interface;
     default: return vscode.CompletionItemKind.Text;
-  }
-}
-
-// Backend query for completions
-async function queryBackendForCompletion(prompt: string): Promise<string> {
-  try {
-    const response = await fetch("http://192.168.1.10:9090/query_completion", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "User-Agent": "VSCode-DevAlley-Extension"
-      },
-      body: JSON.stringify({
-        message: prompt,
-        type: "completion",
-        timeout: 5000
-      }),
-    });
-
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-    }
-
-    const data = (await response.json()) as ApiResponse;
-    return data.response;
-  } catch (error: any) {
-    console.error('Completion backend request failed:', error);
-
-    // fallback
-    try {
-      const fallbackResponse = await fetch("http://192.168.1.10:9090/query_aatma", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "User-Agent": "VSCode-DevAlley-Extension"
-        },
-        body: JSON.stringify({ message: prompt }),
-      });
-
-      if (fallbackResponse.ok) {
-        const data = (await fallbackResponse.json()) as ApiResponse;
-        return data.response;
-      }
-    } catch (fallbackError) {
-      console.error('Fallback request also failed:', fallbackError);
-    }
-
-    return ""; // ✅ never throw, just return empty
   }
 }
 
@@ -423,33 +509,7 @@ function parseCompletionResponse(response: string): CompletionSuggestion[] {
   return [];
 }
 
-// Chat backend query
-async function queryBackend(message: string): Promise<string> {
-  console.log('Making request to backend:', message);
-
-  try {
-    const response = await fetch("http://192.168.1.10:9090/query_aatma", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "User-Agent": "VSCode-DevAlley-Extension"
-      },
-      body: JSON.stringify({ message }),
-    });
-
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-    }
-
-    const data = (await response.json()) as ApiResponse;
-    console.log('Backend response received');
-    return data.response;
-  } catch (error: any) {
-    console.error('Backend request failed:', error);
-    throw new Error(`Backend error: ${error.message}`);
-  }
-}
-
 export function deactivate() {
   console.log('DevAlley extension is being deactivated...');
 }
+
