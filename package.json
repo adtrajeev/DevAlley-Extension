@@ -1,0 +1,284 @@
+{
+  "name": "devalley",
+  "displayName": "DevAlley",
+  "description": "AI-powered code generation and completion assistant for VS Code",
+  "version": "0.0.2",
+  "publisher": "Mahesh-pub",
+  "engines": {
+    "vscode": "^1.103.0"
+  },
+  "categories": ["Other", "Machine Learning", "Programming Languages"],
+  "keywords": [
+    "ai",
+    "code generation",
+    "llm",
+    "assistant",
+    "autocomplete",
+    "copilot",
+    "intellisense",
+    "completion"
+  ],
+  "activationEvents": [
+    "onStartupFinished",
+    "onCommand:devalley.helloWorld",
+    "onCommand:devalley.generateCode",
+    "onCommand:devalley.explainCode",
+    "onCommand:devalley.optimizeCode",
+    "onCommand:devalley.toggleCompletions"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "devalley.helloWorld",
+        "title": "Hello World",
+        "category": "DevAlley"
+      },
+      {
+        "command": "llm.generateCode",
+        "title": "Generate Code with LLM",
+        "category": "DevAlley"
+      },
+      {
+        "command": "devalley.generateCode",
+        "title": "Generate Code from Selection/Description",
+        "category": "DevAlley",
+        "icon": "$(sparkle)"
+      },
+      {
+        "command": "devalley.toggleCompletions",
+        "title": "Toggle AI Completions",
+        "category": "DevAlley",
+        "icon": "$(symbol-boolean)"
+      },
+      {
+        "command": "devalley.explainCode",
+        "title": "Explain Selected Code",
+        "category": "DevAlley",
+        "icon": "$(question)"
+      },
+      {
+        "command": "devalley.optimizeCode",
+        "title": "Optimize Selected Code",
+        "category": "DevAlley",
+        "icon": "$(rocket)"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "devalley.generateCode",
+        "key": "ctrl+shift+g",
+        "mac": "cmd+shift+g",
+        "when": "editorTextFocus"
+      },
+      {
+        "command": "devalley.explainCode",
+        "key": "ctrl+shift+e",
+        "mac": "cmd+shift+e",
+        "when": "editorHasSelection"
+      },
+      {
+        "command": "devalley.toggleCompletions",
+        "key": "ctrl+shift+t",
+        "mac": "cmd+shift+t"
+      }
+    ],
+    "menus": {
+      "editor/context": [
+        {
+          "command": "devalley.generateCode",
+          "when": "editorTextFocus",
+          "group": "1_modification@1"
+        },
+        {
+          "command": "devalley.explainCode",
+          "when": "editorHasSelection",
+          "group": "navigation@1"
+        },
+        {
+          "command": "devalley.optimizeCode",
+          "when": "editorHasSelection",
+          "group": "1_modification@2"
+        }
+      ],
+      "editor/title": [
+        {
+          "command": "devalley.toggleCompletions",
+          "when": "resourceExtname =~ /\\.(js|ts|py|java|cpp|c|cs|php|rb|go|rs|swift|kt)$/",
+          "group": "navigation@1"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "devalley.generateCode",
+          "when": "editorIsOpen"
+        },
+        {
+          "command": "devalley.explainCode",
+          "when": "editorHasSelection"
+        },
+        {
+          "command": "devalley.optimizeCode",
+          "when": "editorHasSelection"
+        }
+      ]
+    },
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "devalley-container",
+          "title": "DevAlley AI Assistant",
+          "icon": "$(robot)"
+        }
+      ]
+    },
+    "views": {
+      "devalley-container": [
+        {
+          "type": "webview",
+          "id": "devalley-sidebar-view",
+          "name": "DevAlley Chat",
+          "when": "true"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "DevAlley AI Assistant",
+      "properties": {
+        "devalley.completions.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable DevAlley AI completions in the editor",
+          "order": 1
+        },
+        "devalley.completions.maxSuggestions": {
+          "type": "number",
+          "default": 5,
+          "minimum": 1,
+          "maximum": 20,
+          "description": "Maximum number of completion suggestions to show",
+          "order": 2
+        },
+        "devalley.completions.triggerOnDot": {
+          "type": "boolean",
+          "default": true,
+          "description": "Trigger completions when typing '.'",
+          "order": 3
+        },
+        "devalley.completions.triggerOnBracket": {
+          "type": "boolean",
+          "default": true,
+          "description": "Trigger completions when typing '(' or '['",
+          "order": 4
+        },
+        "devalley.completions.minWordLength": {
+          "type": "number",
+          "default": 2,
+          "minimum": 1,
+          "maximum": 10,
+          "description": "Minimum word length before showing completions",
+          "order": 5
+        },
+        "devalley.completions.timeout": {
+          "type": "number",
+          "default": 5000,
+          "minimum": 1000,
+          "maximum": 30000,
+          "description": "Timeout for completion requests (in milliseconds)",
+          "order": 6
+        },
+        "devalley.inline.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable inline completions (Copilot-style)",
+          "order": 7
+        },
+        "devalley.hover.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable DevAlley AI hover information",
+          "order": 8
+        },
+        "devalley.backend.url": {
+          "type": "string",
+          "default": "http://192.168.1.10:9090",
+          "description": "Backend server URL",
+          "order": 9
+        },
+        "devalley.backend.completionEndpoint": {
+          "type": "string",
+          "default": "/query_completion",
+          "description": "Endpoint for completion requests",
+          "order": 10
+        },
+        "devalley.backend.chatEndpoint": {
+          "type": "string",
+          "default": "/query_aatma",
+          "description": "Endpoint for chat requests",
+          "order": 11
+        },
+        "devalley.debug.enabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enable debug logging",
+          "order": 12
+        }
+      }
+    },
+    "languages": [
+      {
+        "id": "devalley-output",
+        "aliases": ["DevAlley Output"],
+        "extensions": [".devalley"]
+      }
+    ]
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run package",
+    "compile": "npm run check-types && npm run lint && node esbuild.js",
+    "watch": "npm-run-all -p watch:*",
+    "watch:esbuild": "node esbuild.js --watch",
+    "watch:tsc": "tsc --noEmit --watch --project tsconfig.json",
+    "package": "npm run check-types && npm run lint && node esbuild.js --production",
+    "compile-tests": "tsc -p . --outDir out",
+    "watch-tests": "tsc -p . -w --outDir out",
+    "pretest": "npm run compile-tests && npm run compile && npm run lint",
+    "check-types": "tsc --noEmit",
+    "lint": "eslint src",
+    "test": "vscode-test",
+    "package-extension": "vsce package",
+    "publish": "vsce publish"
+  },
+  "devDependencies": {
+    "@types/mocha": "^10.0.10",
+    "@types/node": "22.x",
+    "@types/node-fetch": "^2.6.13",
+    "@types/vscode": "^1.103.0",
+    "@typescript-eslint/eslint-plugin": "^8.39.0",
+    "@typescript-eslint/parser": "^8.39.0",
+    "@vscode/test-cli": "^0.0.11",
+    "@vscode/test-electron": "^2.5.2",
+    "esbuild": "^0.25.8",
+    "eslint": "^9.32.0",
+    "npm-run-all": "^4.1.5",
+    "typescript": "^5.9.2",
+    "@vscode/vsce": "^3.0.0"
+  },
+  "dependencies": {
+    "node-fetch": "^3.3.2"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yourusername/devalley-vscode.git"
+  },
+  "bugs": {
+    "url": "https://github.com/yourusername/devalley-vscode/issues"
+  },
+  "homepage": "https://github.com/yourusername/devalley-vscode#readme",
+  "license": "MIT",
+  "icon": "images/icon.png",
+  "galleryBanner": {
+    "color": "#1e1e1e",
+    "theme": "dark"
+  }
+}
